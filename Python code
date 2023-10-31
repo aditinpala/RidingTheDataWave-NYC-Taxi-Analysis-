@@ -1,0 +1,726 @@
+#!/usr/bin/env python
+
+# make sure to install these packages before running:
+# pip install pandas
+# !pip install sodapy
+import time
+start_time = time.time()
+import pandas as pd
+# from sodapy import Socrata
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
+from datetime import datetime, timedelta
+import statistics
+
+sns.set_theme(style="whitegrid", palette="pastel")
+# client = Socrata("data.cityofnewyork.us", None)
+# results_2019 = client.get("q5mz-t52e", limit=2000)
+# results_2020 = client.get("pkmi-4kfn", limit=2000)
+# results_2021 = client.get("djnb-wcxt", limit=2000)
+filepathzones="~/datasets/ist652/Fall2022/Team2/taxi_zones.csv"
+
+# # Convert to pandas DataFrame
+# data_19 = pd.DataFrame.from_records(results_2019)
+# data_20 = pd.DataFrame.from_records(results_2020)
+# data_21 = pd.DataFrame.from_records(results_2021)
+taxi = pd.read_csv(filepathzones)
+data_2021_path="~/datasets/ist652/Fall2022/Team2/2021_Green_Taxi_Trip_Data.zip"
+data_2020_path="~/datasets/ist652/Fall2022/Team2/2020_Green_Taxi_Trip_Data.zip"
+data_2019_path="~/datasets/ist652/Fall2022/Team2/2019_Green_Taxi_Trip_Data.zip"
+filepathzones="~/datasets/ist652/Fall2022/Team2/taxi_zones.csv"
+
+data_21 = pd.read_csv(data_2021_path)
+data_20 = pd.read_csv(data_2020_path)
+data_19 = pd.read_csv(data_2019_path)
+taxi = pd.read_csv(filepathzones)
+
+sampleData = False
+data_19.info()
+data_20.info()
+data_21.info()
+# DATA CLEANING
+data_19.drop(['ehail_fee'],axis=1, inplace = True)
+data_20.drop(['ehail_fee'],axis=1, inplace = True)
+data_21.drop(['ehail_fee'],axis=1, inplace = True)
+# data_21 = data_21.rename(
+#     columns={
+#         "lpep_pickup_datetime": "pickup_time", 
+#         "lpep_dropoff_datetime": "dropoff_time",
+#         "pulocationid":"pickup_location",
+#         "dolocationid":"dropoff_location",
+#         "vendorid":"vendor_id",
+#         "ratecodeid":"ratecode_id"
+#     }
+# )
+
+# data_20 = data_20.rename(
+#     columns={
+#         "lpep_pickup_datetime": "pickup_time", 
+#         "lpep_dropoff_datetime": "dropoff_time",
+#         "pulocationid":"pickup_location",
+#         "dolocationid":"dropoff_location",
+#         "vendorid":"vendor_id",
+#         "ratecodeid":"ratecode_id"
+#     }
+# )
+
+# data_19 = data_19.rename(
+#     columns={
+#         "lpep_pickup_datetime": "pickup_time", 
+#         "lpep_dropoff_datetime": "dropoff_time",
+#         "pulocationid":"pickup_location",
+#         "dolocationid":"dropoff_location",
+#         "vendorid":"vendor_id",
+#         "ratecodeid":"ratecode_id"
+#     }
+# )
+data_21 = data_21.rename(
+    columns={
+        "lpep_pickup_datetime": "pickup_time", 
+        "lpep_dropoff_datetime": "dropoff_time",
+        "PULocationID":"pickup_location",
+        "DOLocationID":"dropoff_location",
+        "VendorID":"vendor_id",
+        "RatecodeID":"ratecode_id"
+    }
+)
+
+data_20 = data_20.rename(
+    columns={
+        "lpep_pickup_datetime": "pickup_time", 
+        "lpep_dropoff_datetime": "dropoff_time",
+        "PULocationID":"pickup_location",
+        "DOLocationID":"dropoff_location",
+        "VendorID":"vendor_id",
+        "RatecodeID":"ratecode_id"
+    }
+)
+
+data_19 = data_19.rename(
+    columns={
+        "lpep_pickup_datetime": "pickup_time", 
+        "lpep_dropoff_datetime": "dropoff_time",
+        "PULocationID":"pickup_location",
+        "DOLocationID":"dropoff_location",
+        "VendorID":"vendor_id",
+        "RatecodeID":"ratecode_id"
+    }
+)
+data_df = pd.concat([data_21, data_20, data_19], axis=0)
+# # for mini
+# def conv_datetime(dt):
+#     in_time = datetime.strptime(dt, "%Y-%m-%dT%H:%M:%S.%f")
+#     return datetime.strftime(in_time, "%m/%d/%Y %H:%M:%S")
+
+# for Full
+def conv_datetime(dt):
+    in_time = datetime.strptime(dt, "%m/%d/%Y %I:%M:%S %p")
+    return datetime.strftime(in_time, "%m/%d/%Y %H:%M:%S")
+data_df['pickup_time'] = pd.to_datetime(data_df['pickup_time'].map(conv_datetime))
+data_df['dropoff_time'] = pd.to_datetime(data_df['dropoff_time'].map(conv_datetime))
+data_df = data_df[data_df["dropoff_time"] > data_df['pickup_time']]
+data_df.index = pd.DatetimeIndex(data_df['pickup_time'])
+data_df.to_csv("data_merged_mini.csv")
+df = data_df.sample(frac = 0.01)
+df.to_csv("data_1_percent_sample.csv")
+## CLEANING AND TRANSFORMATION
+# WHEN READING FROM CSV
+data_df = pd.read_csv('data_merged_mini.csv', index_col=0)
+data_df['pickup_time'] = pd.to_datetime(data_df['pickup_time.1'])
+data_df['dropoff_time'] = pd.to_datetime(data_df['dropoff_time'])
+data_df.index = pd.DatetimeIndex(data_df['pickup_time'])
+data = data_df.copy()
+data.info()
+data = data[pd.DatetimeIndex(data['pickup_time']).year >= 2019]
+data = data[pd.DatetimeIndex(data['pickup_time']).year <= 2021]
+data.dropna(subset=['payment_type'], inplace = True)
+data['vendor_id'] = data['vendor_id'].astype(np.float64)
+data['ratecode_id'] = data['ratecode_id'].astype(np.float64)
+data['trip_distance'] = data['trip_distance'].astype(np.float64)
+data['fare_amount'] = data['fare_amount'].astype(np.float64)
+data['extra'] = data['extra'].astype(np.float64)
+data['mta_tax'] = data['mta_tax'].astype(np.float64)
+data['tip_amount'] = data['tip_amount'].astype(np.float64)
+data['tolls_amount'] = data['tolls_amount'].astype(np.float64)
+data['improvement_surcharge'] = data['improvement_surcharge'].astype(np.float64)
+data['total_amount'] = data['total_amount'].astype(np.float64)
+data['payment_type'] = data['payment_type'].astype(int)
+data['trip_type'] = data['trip_type'].astype(np.float64)
+data['congestion_surcharge'] = data['congestion_surcharge'].astype(np.float64)
+data['pickup_location'] = data['pickup_location'].astype(int)
+data['dropoff_location'] = data['dropoff_location'].astype(int)
+data['passenger_count'] = data['passenger_count'].astype(np.float64)
+data.info()
+data.plot(kind='box', figsize = (30,20))
+plt.savefig('Visuals/001_Unclean_boxplot001.jpeg',format='jpeg')
+plt.show()
+# Removing outliers
+# trip distance > 0
+data = data[data['trip_distance'] > 0]
+
+trip_dist = data['trip_distance']
+Q1 = trip_dist.quantile(0.25)
+Q3 = trip_dist.quantile(0.75)
+IQR = Q3 - Q1
+
+data =  data[-((data['trip_distance'] < (Q1 - 1.5 * IQR)) | (data['trip_distance'] > (Q3 + 1.5 * IQR)))]
+# tip amount >= 0
+data = data[data['tip_amount'] >= 0]
+
+tip_amt = data['tip_amount']
+Q1 = tip_amt.quantile(0.25)
+Q3 = tip_amt.quantile(0.75)
+IQR = Q3 - Q1
+
+data =  data[-((data['tip_amount'] < (Q1 - 1.5 * IQR)) | (data['tip_amount'] > (Q3 + 1.5 * IQR)))]
+# total amount >= 2.5
+data = data[data['total_amount'] >= 2.5]
+
+total_amt = data['total_amount']
+Q1 = total_amt.quantile(0.25)
+Q3 = total_amt.quantile(0.75)
+IQR = Q3 - Q1
+
+data =  data[-((data['total_amount'] < (Q1 - 1.5 * IQR)) | (data['total_amount'] > (Q3 + 1.5 * IQR)))]
+# fare amount >= 2.5
+data = data[data['fare_amount'] >= 2.5]
+
+fare_amt = data['fare_amount']
+Q1 = fare_amt.quantile(0.25)
+Q3 = fare_amt.quantile(0.75)
+IQR = Q3 - Q1
+
+data =  data[-((data['fare_amount'] < (Q1 - 1.5 * IQR)) | (data['fare_amount'] > (Q3 + 1.5 * IQR)))]
+# passenger counter b/w 0 and 4
+data = data[data["passenger_count"]>=0]
+data = data[data["passenger_count"]<=4]
+data["passenger_count"] = data["passenger_count"].fillna(data["passenger_count"].median())
+
+# converting to int
+# data['passenger_count'] = int(round(data['passenger_count']))
+# data['passenger_count'] = pd.to_numeric(data['passenger_count']).round(0).astype(int)
+data['passenger_count'] = data['passenger_count'].astype("category")
+# Checking Duplicate indexes
+data.index.duplicated().sum()
+# Removing duplicate indexes
+data = data.loc[~data.index.duplicated(), :]
+nbins = 50
+sns.histplot(data=data, x='passenger_count')
+plt.savefig('Visuals/004_passenger_count_hist.jpeg',format='jpeg')
+sns.histplot(data=data, x='trip_distance', bins = nbins)
+plt.savefig('Visuals/005_trip_distance_hist.jpeg',format='jpeg')
+sns.histplot(data=data, x='tip_amount')
+plt.savefig('Visuals/006_tip_amount_hist.jpeg',format='jpeg')
+sns.histplot(data=data[data['tip_amount']>0], x='tip_amount', bins = nbins)
+plt.savefig('Visuals/007_tip_amount_hist(moreThan0).jpeg',format='jpeg')
+data['tip_amount'].describe()
+sns.histplot(data=data, x='total_amount', bins = nbins)
+plt.savefig('Visuals/008_total_amount_hist.jpeg',format='jpeg')
+
+data['tip_percent'] = 100*(data.tip_amount/data.total_amount)
+data["hour"] = pd.to_datetime(data['pickup_time']).dt.hour
+data["dayofweek"] = pd.to_datetime(data['pickup_time']).dt.dayofweek
+# Calc. Trip Duration - in Minutes
+data['trip_duration'] = (data['dropoff_time'] - data['pickup_time']).dt.total_seconds()/60
+
+duration = data['trip_duration']
+Q1 = duration.quantile(0.25)
+Q3 = duration.quantile(0.75)
+IQR = Q3 - Q1
+
+data =  data[-((data['trip_duration'] < (Q1 - 1.5 * IQR)) | (data['trip_duration'] > (Q3 + 1.5 * IQR)))]
+# Avg Speed => speed = distance / time
+data['trip_avg_speed'] = data['trip_distance'] / (data['trip_duration']/60) # miles/hour
+data['trip_avg_speed']
+data = pd.merge(data,taxi[['LocationID','zone','borough']],left_on=['pickup_location'],right_on=['LocationID'], how='left').drop(['LocationID'],axis=1).rename(columns={"zone": "pickup_zone","borough": "pickup_borough"})
+data = pd.merge(data,taxi[['LocationID','zone','borough']],left_on=['dropoff_location'],right_on=['LocationID'], how='left').drop(['LocationID'],axis=1).rename(columns={"zone": "dropoff_zone","borough": "dropoff_borough"})
+data.to_csv("data_cleaned_mini.csv")
+df = data.sample(frac = 0.05)
+df.to_csv("data_cleaned_5_percent_sample.csv")
+# plotting box plt
+data.plot(kind='box', figsize = (30,20))
+plt.savefig('Visuals/002_clean_boxplot001.jpeg',format='jpeg')
+data[data.columns.difference(['pickup_location', 'dropoff_location'])].plot(kind='box', figsize = (30,20))
+plt.savefig('Visuals/003_clean_boxplot002.jpeg',format='jpeg')
+# data.index = pd.DatetimeIndex(data['pickup_time'])
+data.index
+# Analysis
+# When Reading from CSV
+data = pd.read_csv('data_cleaned_mini.csv', index_col = 0)
+data['pickup_time'] = pd.to_datetime(data['pickup_time.1'])
+data['dropoff_time'] = pd.to_datetime(data['dropoff_time'])
+data.index = pd.DatetimeIndex(data['pickup_time'])
+data.info()
+# Trip Distance
+# generate log-normal distributed set of samples
+np.random.seed(42)
+samples = data['trip_distance']
+
+# make a fit to the samples
+shape, loc, scale = stats.lognorm.fit( samples, floc=0 )
+x_fit = np.linspace(samples.min(), samples.max(), 100 )
+samples_fit = stats.lognorm.pdf( x_fit, shape, loc=loc, scale=scale )
+
+# plot a histrogram with linear x-axis
+counts, bin_edges, ignored = plt.hist( samples, bins = 20, histtype='stepfilled', label='histogram' )
+# calculate area of histogram (area under PDF should be 1)
+area_hist = .0
+for ii in range( counts.size):
+    area_hist += (bin_edges[ii+1]-bin_edges[ii]) * counts[ii]
+    
+# oplot fit into histogram
+plt.plot( x_fit, samples_fit*area_hist, label='fitted and area-scaled PDF', linewidth=2)
+plt.xlabel('Trip Distance (Miles)')
+plt.ylabel('Number of Rides')
+plt.legend(['Logarithmic Fit', 'Data'])
+plt.savefig('Visuals/009_total_amount_hist.jpeg',format='jpeg')
+plt.show()
+# Payment Type
+data_pt_1 = data[data['payment_type'] == 1]
+data_pt_2 = data[data['payment_type'] == 2]
+
+data_combined = pd.concat([data_pt_1, data_pt_2])
+
+data_plotable = data_combined.groupby(
+    [
+        data_combined.index.year,
+        data_combined.index.month, 
+        data_combined['payment_type']
+    ]
+)['payment_type'].count().unstack()
+data_plotable.plot(figsize = (30,10))
+plt.xlabel('Ride Dates (Year, Month)')
+plt.ylabel('Number of Rides')
+plt.legend(['Credit Card', 'Cash'], title = "Payment Type")
+plt.axvline(x = 14, color = 'g')
+plt.savefig('Visuals/010_Payment_types_trend.jpeg',format='jpeg')
+plt.show()
+# Trips Trends
+data_trips_plotable = data.groupby(
+    [
+        data.index.year,
+        data.index.month, 
+        data.index.day, 
+        round(data['tip_amount'])
+    ]
+)['tip_amount'].mean().unstack()
+data_trips_plotable.plot(figsize = (30,10))
+plt.xlabel('Ride Dates (Year, Month, Day)')
+plt.ylabel('Tip Amount')
+# plt.legend(['Credit Card', 'Cash'], title = "Payment Type")
+plt.axvline(x = 436, color = 'g')
+plt.savefig('Visuals/024_tip_amount_trend.jpeg',format='jpeg')
+plt.show()
+# data.resample('1D').count().index.plot()
+# Trip Time Trends
+#mean & Median trip distance per hour of day
+vals = data.groupby("hour")["trip_distance","hour"].mean()
+plt.bar(vals.hour,vals.trip_distance,color = 'r')
+
+vals2 = data.groupby("hour")["trip_distance","hour"].median()
+plt.bar(vals2.hour,vals2.trip_distance, color = 'b', alpha = 0.8)
+
+plt.title("Mean and Median Trip Distance vs Time of day")
+plt.xlabel("Hour of Day")
+plt.xticks(vals.hour)
+plt.ylabel("Mean Trip Distance (miles)")
+plt.legend(['Mean', 'Median'], title = "Trip Distance")
+
+plt.savefig('Visuals/011_trip_dist_daily_trend.jpeg',format='jpeg')
+plt.show()
+#mean & Median trip distance per week
+vals = data.groupby("dayofweek")["trip_distance","dayofweek"].mean()
+plt.bar(vals.dayofweek,vals.trip_distance, color = 'r')
+
+vals2 = data.groupby("dayofweek")["trip_distance","dayofweek"].median()
+plt.bar(vals2.dayofweek,vals2.trip_distance, color = 'g', alpha = 0.8)
+
+plt.title("Mean Trip Distance vs Day of the Week")
+plt.xlabel("Day of the Week")
+plt.xticks(vals.dayofweek)
+plt.ylabel("Mean Trip Distance (miles)")
+plt.legend(['Mean', 'Median'], title = "Trip Distance", loc='lower right')
+plt.savefig('Visuals/012_trip_dist_weekly_trend.jpeg',format='jpeg')
+plt.show()
+# Trips per day
+vals = data.groupby("hour")["vendor_id"].count()
+plt.bar(range(0,24),vals.values,color = 'b')
+plt.plot(range(0,24),vals.values,color = 'r')
+plt.title("Number of Trips vs Hour of day")
+plt.xlabel("Hour of Day")
+plt.xticks(range(0,24))
+plt.ylabel("Number of Trips")
+plt.savefig('Visuals/013_trip_counts_hist_trend.jpeg',format='jpeg')
+plt.show()
+# Trips per day
+vals = data.groupby("hour")["vendor_id"].count()
+plt.plot(range(0,24),vals.values,color = 'r')
+plt.title("Number of Trips vs Hour of day")
+plt.xlabel("Hour of Day")
+plt.xticks(range(0,24))
+plt.ylabel("Number of Trips")
+plt.savefig('Visuals/014_trip_counts_line_trend.jpeg',format='jpeg')
+plt.show()
+plt.figure(figsize = (20,15))
+corr_matrix = data.corr().round(2)
+sns.heatmap(data = corr_matrix, annot = True, linewidths = 2)
+plt.savefig('Visuals/015_corr_matrix.jpeg',format='jpeg')
+plt.show()
+# Airport trips
+data['pickup_hour'] = pd.DatetimeIndex(data['pickup_time']).hour
+airports_trips = data[(data.ratecode_id==2) | (data.ratecode_id==3)]
+fig,ax = plt.subplots(3,2,figsize = (15,12))
+fig.tight_layout(pad=5.0)
+years = [2019, 2020, 2021]
+
+air = []
+non_air = []
+air_percent = []
+
+for i,y in enumerate(years):
+    temp = data[pd.DatetimeIndex(data['pickup_time']).year == y].copy()
+    temp['pickup_hour'] = pd.DatetimeIndex(temp['pickup_time']).hour
+    airports_trips = temp[(temp.ratecode_id==2) | (temp.ratecode_id==3)]
+    non_airport_trips = temp[(temp.ratecode_id!=2) & (temp.ratecode_id!=3)]
+
+    # create a vector to contain Trip Distance for
+    airport = airports_trips['trip_distance'] # airport trips
+    non_airport = non_airport_trips['trip_distance'] # non airport trips
+    
+    air.append(len(airport))
+    non_air.append(len(non_airport))
+    air_percent.append((len(airport)/len(non_airport))*100)
+
+    # define bins boundaries
+    bins = np.histogram(airport,density=True)[1]
+    h2 = np.histogram(airport,bins=bins,density=True)
+    h3 = np.histogram(non_airport,bins=bins,density=True)
+
+    # plot distributions of trip distance normalized among groups
+    w = .4*(bins[1]-bins[0])
+    ax[i,0].bar(bins[:-1],h2[0],alpha=1,width=w,color='b')
+    ax[i,0].bar(bins[:-1]+w,h3[0],alpha=1,width=w,color='g')
+    ax[i,0].legend(['Airport trips','Non-airport trips'],loc='best',title='Trip Destinations')
+    ax[i,0].set_xlabel('Trip distance (miles)')
+    ax[i,0].set_ylabel('Group normalized trips count')
+    ax[i,0].set_title('A. Trip distance distribution for year {}'.format(y))
+
+    # plot hourly distribution
+    airports_trips['pickup_hour'].value_counts(normalize=True).sort_index().plot(ax=ax[i,1])
+    temp.loc[~temp.index.isin(airport.index),'pickup_hour'].value_counts(normalize=True).sort_index().plot(ax=ax[i,1])
+    ax[i,1].set_xlabel('Hours')
+    ax[i,1].set_ylabel('Group normalized trips count')
+    ax[i,1].set_title('B. Hourly distribution of trips for year {}'.format(y))
+    ax[i,1].legend(['Airport trips','Non-airport trips'],loc='best',title='Trip Destinations')
+plt.savefig('Visuals/016_Yearly_airport_trips.jpeg',format='jpeg')
+plt.show()
+# data.loc[data['fare_amount'].index]['tip_percent']
+# tip % by fare amt
+plt.plot(data['fare_amount'],data['tip_percent'],'.',alpha=0.4)
+plt.title('Distribution of Tip Percentage by Fare Amount')
+plt.xlabel('Fare Amount')
+plt.ylabel('Tip (%)')
+plt.savefig('Visuals/017_Tip_percent_vs_fare_trend.jpeg',format='jpeg')
+plt.show()
+plt.plot(data['fare_amount'],data['tip_amount'],'.',alpha=0.4)
+plt.title('Distribution of Tip Percentage by Fare Amount')
+plt.xlabel('Fare Amount')
+plt.ylabel('Tip Amount')
+plt.savefig('Visuals/018_Tip_amount_vs_fare_trend.jpeg',format='jpeg')
+plt.show()
+# tip % by fare amt
+plt.plot(data['total_amount'],data['tip_percent'],'.',alpha=0.4)
+plt.title('Distribution of Tip Percentage by Total Amount')
+plt.xlabel('Total Amount')
+plt.ylabel('Tip (%)')
+plt.savefig('Visuals/017_1_Tip_percent_vs_total_amt_trend.jpeg',format='jpeg')
+plt.show()
+plt.plot(data['total_amount'],data['tip_amount'],'.',alpha=0.4)
+plt.title('Distribution of Tip Percentage by Fare Amount')
+plt.xlabel('Total Amount')
+plt.ylabel('Tip Amount')
+plt.savefig('Visuals/018_1_Tip_amount_vs_total_amt_trend.jpeg',format='jpeg')
+plt.show()
+# Trip patterns with locations
+# nyc_boros = json.loads(requests.get("https://raw.githubusercontent.com/dwillis/nyc-maps/master/boroughs.geojson").content)
+# # parse boros into Multipolygons
+# boros = {}
+# for f in nyc_boros['features']:
+#     name = f['properties']['BoroName']
+#     code = f['properties']['BoroCode']
+#     polygons = []
+#     for p in f['geometry']['coordinates']:
+#         polygons.append(Polygon(p[0]))
+#     boros[code] = {'name':name,'polygon':MultiPolygon(polygons=polygons)}
+    
+# # creae function to assign each coordinates point to its borough
+# def find_borough(lat,lon):
+#     """
+#     return the borough of a location given its latitude and longitude
+#     lat: float, latitude
+#     lon: float, longitude
+#     """
+#     boro = 0 # initialize borough as 0
+#     for k,v in boros.iteritems(): # update boro to the right key corresponding to the parent polygon
+#         if v['polygon'].contains(Point(lon,lat)):
+#             boro = k
+#             break # break the loop once the borough is found
+#     return [boro]
+data_pt_1 = data[data['payment_type'] == 1]
+data_pt_2 = data[data['payment_type'] == 2]
+
+data_combined2 = pd.concat([data_pt_1, data_pt_2])
+
+data_plotable2 = data_combined2.groupby(
+    [
+        data_combined2['tip_percent'],
+        data_combined2['payment_type']
+    ]
+)['payment_type'].count().unstack()
+
+plt.figure(figsize = (15,10))
+plt.plot(data_plotable2)
+plt.legend()
+plt.yscale('log')
+plt.title('Distribution of Tip by Payment Type')
+plt.xlabel('Tip (%)')
+plt.ylabel('Rides')
+plt.legend(['Credit Card', 'Cash'], title = "Payment Type")
+plt.savefig('Visuals/019_Tip_by_payment_type.jpeg',format='jpeg')
+plt.show()
+data_plotable2 = data_combined2.groupby(
+    [
+        data_combined2['tip_amount'],
+        data_combined2['payment_type']
+    ]
+)['payment_type'].count().unstack()
+
+plt.figure(figsize = (15,10))
+plt.plot(data_plotable2)
+plt.legend()
+plt.yscale('log')
+plt.title('Distribution of Tip by Payment Type')
+plt.xlabel('Tip')
+plt.ylabel('Rides')
+plt.legend(['Credit Card', 'Cash'], title = "Payment Type")
+plt.savefig('Visuals/020_Tip_amount_by_payment_type.jpeg',format='jpeg')
+plt.show()
+
+
+
+
+#mean & Median trip speed per hour of day
+vals = data.groupby("hour")["trip_avg_speed","hour"].mean()
+plt.bar(vals.hour,vals.trip_avg_speed,color = 'r')
+
+vals2 = data.groupby("hour")["trip_avg_speed","hour"].median()
+plt.bar(vals2.hour,vals2.trip_avg_speed, color = 'b', alpha = 0.8)
+
+plt.title("Mean and Median Speed (m/h) vs Time of day")
+plt.xlabel("Hour of Day")
+plt.xticks(vals.hour)
+plt.ylabel("Speed (miles/Hour)")
+plt.legend(['Mean', 'Median'], title = "Trip Distance")
+plt.savefig('Visuals/021_speed_vs_time_of_day.jpeg',format='jpeg')
+plt.show()
+# vals = data.groupby("hour")["trip_avg_speed","hour"]
+# plt.bar(vals.hour,vals.trip_avg_speed,color = 'r')
+
+# data_pt_1 = data[data['payment_type'] == 1]
+# data_pt_2 = data[data['payment_type'] == 2]
+
+# data_combined2 = pd.concat([data_pt_1, data_pt_2])
+
+# data_plotable2 = data_combined2.groupby(
+#     [
+#         data_combined2['tip_percent'],
+#         data_combined2['payment_type']
+#     ]
+# )['payment_type']
+
+plt.figure(figsize = (15,10))
+plt.plot(data['tip_percent'], data['trip_duration'],'.',alpha = 0.4)
+# plt.yscale('log')
+plt.title('Distribution of Tip by trip Duration')
+plt.xlabel('Tip (%)')
+plt.ylabel('Trip Duration (minutes)')
+plt.legend(['Credit Card', 'Cash'], title = "Payment Type")
+plt.savefig('Visuals/022_tip_percent_vs_trip_duration.jpeg',format='jpeg')
+plt.show()
+# data_plotable2 = data_combined2.groupby(
+#     [
+#         data_combined2['tip_amount'],
+#         data_combined2['payment_type']
+#     ]
+# )['payment_type'].count().unstack()
+
+plt.figure(figsize = (15,10))
+plt.plot(data['tip_amount'], data['trip_duration'],'.',alpha = 0.4)
+plt.yscale('log')
+plt.title('Distribution of Tip amount by trip Duration')
+plt.xlabel('Tip amount')
+plt.ylabel('Rides')
+plt.legend(['Credit Card', 'Cash'], title = "Payment Type")
+plt.savefig('Visuals/023_tip_amount_vs_trip_duration.jpeg',format='jpeg')
+plt.show()
+
+# data = pd.read_csv('data_cleaned_5_percent_sample.csv', index_col = 0)
+# data['pickup_time'] = pd.to_datetime(data['pickup_time.1'])
+# data['dropoff_time'] = pd.to_datetime(data['dropoff_time'])
+# data.index = pd.DatetimeIndex(data['pickup_time'])
+data.info()
+data_trips_plotable = data.groupby(
+    [
+        data.index.hour, 
+        data['passenger_count']
+    ]
+)['passenger_count'].count().unstack()
+
+# vals = data.groupby("hour","passenger_count")["passenger_count"].count()
+data_trips_plotable.plot(figsize = (30,10))
+plt.title("Passenger Count vs Hour of day")
+plt.xlabel("Hour of Day")
+plt.xticks(range(24))
+plt.ylabel("Passenger Count")
+plt.savefig('Visuals/025_daily_passenger_counts_trend.jpeg',format='jpeg')
+plt.show()
+# data_trips_plotable
+temp = data[data['passenger_count']>1]
+data_trips_plotable = temp.groupby(
+    [
+        temp.index.hour, 
+        temp['passenger_count']
+    ]
+)['passenger_count'].count().unstack()
+
+# vals = data.groupby("hour","passenger_count")["passenger_count"].count()
+data_trips_plotable.plot(figsize = (30,10))
+plt.title("Passenger Count vs Hour of day")
+plt.xlabel("Hour of Day")
+plt.xticks(range(24))
+plt.ylabel("Passenger Count")
+plt.savefig('Visuals/026_daily_passenger_counts_trend_Group.jpeg',format='jpeg')
+plt.show()
+temp = data[data['passenger_count']>1]
+data_trips_plotable = temp.groupby(
+    [
+        temp.index.dayofweek, 
+        temp['passenger_count']
+    ]
+)['passenger_count'].count().unstack()
+
+# vals = data.groupby("hour","passenger_count")["passenger_count"].count()
+data_trips_plotable.plot(figsize = (30,10))
+plt.title("Passenger Count vs dayOfWeek")
+plt.xlabel("Day of Week")
+# plt.xticks(range(24))
+plt.ylabel("Passenger Count")
+plt.savefig('Visuals/026_1_daily_passenger_counts_trend_Group.jpeg',format='jpeg')
+plt.show()
+data_trips_plotable = data.groupby(
+    [
+        data["dayofweek"], 
+        data['passenger_count']
+    ]
+)['passenger_count'].count().unstack()
+
+# vals = data.groupby("hour","passenger_count")["passenger_count"].count()
+data_trips_plotable.plot(figsize = (30,10))
+plt.title("Passenger Count vs Day of week day")
+plt.xlabel("Hour of Day")
+plt.xticks(range(7))
+plt.ylabel("Passenger Cont")
+plt.savefig('Visuals/027_passenger_weekly_trend.jpeg',format='jpeg')
+plt.show()
+# data.info()
+diff_boro_df = data[data['pickup_borough'] != data['dropoff_borough']]
+diff_boro_df
+
+# diff_boro_count
+diff_boro_df.dropna(inplace = True)
+temp = diff_boro_df[['pickup_borough', 'dropoff_borough']]
+temp['val']=1
+temp.info()
+# temp.dropna(inplace = True)
+# temp.info()
+mat_cluster1 = temp.pivot_table(index='pickup_borough',columns='dropoff_borough',values='val',aggfunc='count')
+mat_cluster1
+fig,ax = plt.subplots(figsize=(15,4))
+im = plt.imshow(mat_cluster1)
+ax.set_ylabel('From')
+ax.set_xlabel('To')
+ax.set_xticklabels(['','Bronx','Brooklyn','Manhattan','Queens','Staten Island'],rotation='vertical')
+ax.set_yticklabels(['','Bronx','Brooklyn','Manhattan','Queens','Staten Island'])
+ax.set_title('Inter Borough Rides')
+fig.colorbar(im)
+plt.savefig('Visuals/028_inter_borough_rides.jpeg',format='jpeg')
+plt.figure(figsize = (15,10))
+h = data.hour.value_counts(normalize=True)
+plt.bar(h.index,h.values,width = .4,color='b')
+h = diff_boro_df.hour.value_counts(normalize=True)
+plt.bar(h.index+.4,h.values,width = .4,color='g')
+plt.title('Hourly traffic: All rides vs Inter Borough rides')
+plt.legend(['inter-borough trips','all Trips'],loc='best')
+plt.xlabel('Hour')
+plt.xticks(np.arange(24)+.4,range(24))
+plt.ylabel('Normalized Count')
+plt.savefig('Visuals/029_Hourly_traffic All rides vs Inter Borough rides.jpeg',format='jpeg')
+
+
+tempData = data[data['pickup_time'].dt.year == 2019].copy()
+temp = tempData[["pickup_time"]]
+temp.groupby(temp["pickup_time"].dt.month)["pickup_time"].count().plot(kind="bar")
+plt.title('Monthly Rides for Year = 2019')
+plt.xlabel('Months')
+plt.ylabel('Ride Counts')
+plt.savefig('Visuals/030_1_Monthly_Rides_Trend.jpeg',format='jpeg')
+tempData = data[data['pickup_time'].dt.year == 2020].copy()
+temp = tempData[["pickup_time"]]
+temp.groupby(temp["pickup_time"].dt.month).count().plot(kind="bar")
+plt.title('Monthly Rides for Year = 2020')
+plt.xlabel('Months')
+plt.ylabel('Ride Counts')
+plt.savefig('Visuals/030_2_Monthly_Rides_Trend.jpeg',format='jpeg')
+tempData = data[data['pickup_time'].dt.year == 2021].copy()
+temp = tempData[["pickup_time"]]
+temp.groupby(temp["pickup_time"].dt.month).count().plot(kind="bar")
+plt.title('Monthly Rides for Year = 2021')
+plt.xlabel('Months')
+plt.ylabel('Ride Counts')
+plt.savefig('Visuals/030_3_Monthly_Rides_Trend.jpeg',format='jpeg')
+
+data.info(null_counts=True)
+data['surcharge'] = data['congestion_surcharge'] + data['improvement_surcharge']
+data_plotable = data.groupby(
+    [
+        data['pickup_time'].dt.hour,
+        data['pickup_borough']
+    ]
+)['surcharge'].mean().unstack()
+data_plotable.plot(figsize = (30,10), kind = 'bar')
+plt.xlabel('Hours')
+plt.ylabel('Total Surcharge Amount')
+plt.legend(title = "Pickup Borough")
+plt.savefig('Visuals/031_Payment_types_trend.jpeg',format='jpeg')
+plt.show()
+data_plotable
+# import matplotlib as mpl
+# mpl.rcParams['agg.path.chunksize'] = 10000
+# plt.plot(data['hour'], data['surcharge'])
+data_plotable = data.groupby(
+    [
+        data.index.dayofweek,
+        data['dropoff_borough']
+    ]
+)['dropoff_borough'].count().unstack()
+data_plotable.plot(figsize = (30,10), kind = 'bar')
+plt.title("Ride booking to different borough weekly")
+plt.xlabel('Day of Week')
+plt.ylabel('Ride Count')
+plt.legend(title = "Dropoff Borough")
+plt.savefig('Visuals/032_Payment_types_trend.jpeg',format='jpeg')
+plt.show()
+
+data_plotable
